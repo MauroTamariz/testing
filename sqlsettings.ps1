@@ -1,84 +1,8 @@
-
-
-#(new-object net.webclient).DownloadFile('https://aka.ms/installazurecliwindows','az.msi')
-#./az.msi /quiet
-
-Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -Uri "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | ConvertTo-Json -Depth 64 >c:\meta.json
-
-$a = Get-Content C:\meta.json | ConvertFrom-Json
-
-$subscriptionId = $a.compute.subscriptionId
-$location = $a.compute.location
-$resourceGroup = $a.compute.resourceGroupName
-$resourceId = $a.compute.resourceId
-$name = $a.compute.name
-$storageDetails = $a.compute.storageProfile.dataDisks
-$sku = $a.compute.sku
-$userData = $a.compute.userData
-$customData = $a.compute.customData
-$vmSize = $a.compute.vmSize
-
-#
-$privateIpAddress = $a.network.interface.ipv4.ipAddress.publicIpAddress
-$privateIpAddress = $a.network.interface.ipv4.ipAddress.privateIpAddress
-
-#networking
-$subnet = ($a.network.interface.ipv4.subnet |select address).address
-$mask = ($a.network.interface.ipv4.subnet |select prefix).prefix
-
-$count = $storageDetails.count
-
-Try
-{
-    $drv = Get-WmiObject win32_volume -filter 'DriveLetter = "E:"'
-    $drv.DriveLetter = "Z:"
-    $drv.Put() | out-null
-    Write-Host "Changing CDROM to Z"
-}
-Catch
-{
-    Write-Host "An error occurred changing CDROM letter"
-}
-
-
-function InitializeDisk($disk){
-    Try
-    {
-        Initialize-Disk -Number $disk -PartitionStyle GPT -ErrorAction SilentlyContinue
-        
-        Write-Host "Initializing disk $disk"
-        sleep 5
-    }
-    Catch
-    {
-        Write-Host "An error occurred Initializing $disk"
-    }
-
-}
-
-$i=2
-while($i -lt 6){
-    InitializeDisk($i)
-    $i=$i+1
-}
-
-
-New-Volume -DiskNumber 2 -FriendlyName 'SQL-System' -DriveLetter E -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-New-Volume -DiskNumber 3 -FriendlyName 'SQL-Data' -DriveLetter F -AllocationUnitSize 64KB -ErrorAction SilentlyContinue 
-New-Volume -DiskNumber 4 -FriendlyName 'SQL-Logs' -DriveLetter G -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-New-Volume -DiskNumber 5 -FriendlyName 'SQL-TempDB' -DriveLetter T -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-
-(new-object net.webclient).DownloadFile('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1','local.ps1')
-./local.ps1
-
-winrm quickconfig -quiet
- 
 Install-WindowsFeature RSAT-AD-PowerShell 
-# Install-ADServiceAccount -Identity "accountToReplace" 
-# Test-ADServiceAccount -Identity "accountToReplace"
-
-sc.exe --% config "MSSQLSERVER" obj="accountToReplace" type= own 
-sc.exe --% config "SQLSERVERAGENT" obj="accountToReplace" type= own 
+Install-ADServiceAccount -Identity "accountToReplace" 
+Test-ADServiceAccount -Identity "accountToReplace"
+sc.exe --% config "MSSQLSERVER" obj="prod\accountToReplace$" type= own 
+sc.exe --% config "SQLSERVERAGENT" obj="prod\accountToReplace$" type= own 
 Set-Service -Name SQLSERVERAGENT -StartupType Automatic
 Stop-Service -Name 'MSSQLSERVER' -Force
 Start-Service -Name 'MSSQLSERVER'
@@ -93,6 +17,10 @@ Catch
 {
     Write-Host "check SQLSERVERAGENT"
 }
+
+SetSPN -s "MSSQLSvc/serverToReplace.prod.cloud" "prod\accountToReplace$"
+SetSPN -s "MSSQLSvc/serverToReplace.prod.cloud:1433" "prod\accountToReplace$"
+setSPN -L "prod\accountToReplace$"
 
 ##########################################################################
 #  Import SQLServer Module
@@ -137,118 +65,8 @@ IF ($SQLServiceAccount -eq $SQLServiceAgtAccount) {
         Add-LocalGroupMember -Group "Administrators" -Member $SQLServiceAccount -ErrorAction SilentlyContinue
 } ELSE {
 }
-#(new-object net.webclient).DownloadFile('https://aka.ms/installazurecliwindows','az.msi')
-#./az.msi /quiet
-Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -Uri "http://169.254.169.254/metadata/instance?api-version=2021-02-01" | ConvertTo-Json -Depth 64 >c:\meta.json
-$a = Get-Content C:\meta.json | ConvertFrom-Json
-$subscriptionId = $a.compute.subscriptionId
-$location = $a.compute.location
-$resourceGroup = $a.compute.resourceGroupName
-$resourceId = $a.compute.resourceId
-$name = $a.compute.name
-$storageDetails = $a.compute.storageProfile.dataDisks
-$sku = $a.compute.sku
-$userData = $a.compute.userData
-$customData = $a.compute.customData
-$vmSize = $a.compute.vmSize
-#
-$privateIpAddress = $a.network.interface.ipv4.ipAddress.publicIpAddress
-$privateIpAddress = $a.network.interface.ipv4.ipAddress.privateIpAddress
-#networking
-$subnet = ($a.network.interface.ipv4.subnet |select address).address
-$mask = ($a.network.interface.ipv4.subnet |select prefix).prefix
-$count = $storageDetails.count
-Try
-{
-    $drv = Get-WmiObject win32_volume -filter 'DriveLetter = "E:"'
-    $drv.DriveLetter = "Z:"
-    $drv.Put() | out-null
-    Write-Host "Changing CDROM to Z"
-}
-Catch
-{
-    Write-Host "An error occurred changing CDROM letter"
-}
-function InitializeDisk($disk){
-    Try
-    {
-        Initialize-Disk -Number $disk -PartitionStyle GPT -ErrorAction SilentlyContinue
-        Write-Host "Initializing disk $disk"
-        sleep 5
-    }
-    Catch
-    {
-        Write-Host "An error occurred Initializing $disk"
-    }
-}
-$i=2
-while($i -lt 6){
-    InitializeDisk($i)
-    $i=$i+1
-}
-New-Volume -DiskNumber 2 -FriendlyName 'SQL-System' -DriveLetter E -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-New-Volume -DiskNumber 3 -FriendlyName 'SQL-Data' -DriveLetter F -AllocationUnitSize 64KB -ErrorAction SilentlyContinue 
-New-Volume -DiskNumber 4 -FriendlyName 'SQL-Logs' -DriveLetter G -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-New-Volume -DiskNumber 5 -FriendlyName 'SQL-TempDB' -DriveLetter T -AllocationUnitSize 64KB -ErrorAction SilentlyContinue
-(new-object net.webclient).DownloadFile('https://raw.githubusercontent.com/ansible/ansible/devel/examples/scripts/ConfigureRemotingForAnsible.ps1','local.ps1')
-./local.ps1
-winrm quickconfig -quiet
-Install-WindowsFeature RSAT-AD-PowerShell 
-# Install-ADServiceAccount -Identity "accountToReplace" 
-# Test-ADServiceAccount -Identity "accountToReplace"
-sc.exe --% config "MSSQLSERVER" obj="accountToReplace" type= own 
-sc.exe --% config "SQLSERVERAGENT" obj="accountToReplace" type= own 
-Set-Service -Name SQLSERVERAGENT -StartupType Automatic
-Stop-Service -Name 'MSSQLSERVER' -Force
-Start-Service -Name 'MSSQLSERVER'
-Stop-Service -Name 'SQLSERVERAGENT'
-Try
-{
-    Start-Service -Name 'SQLSERVERAGENT'
-    Write-Host "Starting SQLSERVERAGENT"
-}
-Catch
-{
-    Write-Host "check SQLSERVERAGENT"
-}
-##########################################################################
-#  Import SQLServer Module
-#  file move
-##########################################################################
-$SQLServiceAccount = "accountToReplace"
-Import-Module -Name SQLPS
-#Install-module sqlserver
-$Server = hostname
-$iName = hostname
-IF ($SQLServiceAccount -eq $SQLServiceAgtAccount) {
-        Add-LocalGroupMember -Group "Administrators" -Member $SQLServiceAccount
-} ELSE {
-}
-try{
-    Add-LocalGroupMember -Group "Administrators" -Member $SQLServiceAccount -ErrorAction SilentlyContinue
-    Add-LocalGroupMember -Group "Administrators" -Member $SQLServiceAgtAccount -ErrorAction SilentlyContinue
-    Write-Host "Starting SQLSERVERAGENT"
-}
-Catch
-{
-    Write-Host "check SQLSERVERAGENT"
-}
-$Server = hostname
-$iName = hostname
-$ins = Invoke-Command -ComputerName $Server -ScriptBlock { Get-Item -path 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL' | Select-Object -ExpandProperty Property }
-if($ins -ne "MSSQLSERVER")
-{ $SQLService = "MSSQL$" + $ins; $agt1 = "SQLAgent$" + $ins;}
-else { $SQLService = "MSSQLSERVER"; $agt1 = "SQLSERVERAGENT" ;}
-###########################################################################
-##  Get and Add SQL Service\SQL Agent service to admins group will
-##  completing file move
-###########################################################################
-$SQLServiceAccount = Get-WmiObject win32_service -computer $Server | Where-Object {$_.name -eq $SQLService} | select -ExpandProperty StartName
-$SQLServiceAgtAccount = Get-WmiObject win32_service -computer $Server | Where-Object {$_.name -eq $agt1} | select -ExpandProperty StartName
-IF ($SQLServiceAccount -eq $SQLServiceAgtAccount) {
-        Add-LocalGroupMember -Group "Administrators" -Member $SQLServiceAccount -ErrorAction SilentlyContinue
-} ELSE {
-}
+
+
 ###########################################################################
 ##  Set Variables for the Master, msdb, and model databases
 ##
@@ -262,6 +80,8 @@ $targetdatapath = $sourcedatapath.Replace("C:\","E:\")
 $targetdatapath = $targetdatapath.TrimEnd("\")
 $masterTlog = $s.Databases["Master"].LogFiles.FileName
 $masterData = $s.Databases["Master"].Filegroups.Files.FileName
+
+
 $sblock = [scriptblock]::Create("get-ItemProperty -path ""HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$ins\MSSQLServer\Parameters"" -Name SQLArg1 | select -ExpandProperty SQLArg1")
 $ErrorlogLocationStartupParam = invoke-command -computername $Server -ScriptBlock $sblock
 $TargetErrorlogLocationStartupParam = $ErrorlogLocationStartupParam.Replace("C:\","E:\")
@@ -272,6 +92,7 @@ $TargetErrorlogLocation = $TargetErrorlogLocation.TrimEnd('\ERRORLOG')
 $sblock = [scriptblock]::Create("get-ItemProperty -path ""HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$ins\CPE"" -Name ErrorDumpDir | select -ExpandProperty ErrorDumpDir")
 $SQLServerDumpLocation = invoke-command -computername $Server -ScriptBlock $sblock
 $TargetSQLServerDumpLocation = $SQLServerDumpLocation.Replace("C:\","E:\")
+
 $DefaultDataLocation = $s | Select -ExpandProperty DefaultFile
 $DefaultLogLocation = $s | Select -ExpandProperty DefaultLog
 $DefaultBackupDirectory = $s | Select -ExpandProperty BackupDirectory
@@ -280,6 +101,8 @@ $UserDBDataDefaultLocation = 'F:\SQL_Data'
 $UserDBLogDefaultLocation = 'G:\SQL_Logs'
 $TempDBTargetLocation = 'T:\SQL_TempDB'
 ##################################################
+
+
 ###########################################################################
 ## Create Directories on the GPT\64K formatted drives
 ## ###########################################################################
@@ -291,6 +114,8 @@ $TempDBTargetLocation = 'T:\SQL_TempDB'
  New-Item -ItemType Directory -Force -Path $UserDBDataDefaultLocation
  New-Item -ItemType Directory -Force -Path $UserDBLogDefaultLocation
  New-Item -ItemType Directory -Force -Path $TempDBTargetLocation
+
+
 ###########################################################################
 ## Move SQL Server Agent Error log file and Default backup directory
 ##
@@ -301,10 +126,13 @@ $s.jobserver.ErrorLogFile = $SQLAgentERRORLogLocation
 $s.jobserver.Alter();
 $s.DefaultFile = $UserDBDataDefaultLocation
 $s.Alter();
+
 $s.DefaultLog = $UserDBLogDefaultLocation
 $s.Alter();
+
 $s.BackupDirectory = $DefaultBackupDirectory
 $s.Alter();
+
 ###########################################################################
 ##  Update model and msdb files.  Stop services and update master startup
 ##  params
@@ -330,6 +158,7 @@ $('tempdb')|
 datapath","$TempDBTargetLocation")}
 $s.databases[$PSItem].Alter()
 }
+
 ###########################################################################
 ##  Stopping sql server services to move all necessary files and setting
 ##  sql server agent services to automatic
@@ -342,22 +171,27 @@ $sblock = [scriptblock]::Create("Set-ItemProperty -path ""HKLM:\SOFTWARE\Microso
 invoke-command -computername $Server -ScriptBlock $sblock
 $sblock = [scriptblock]::Create("Set-ItemProperty -path ""HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$ins\MSSQLServer\Parameters"" -Name SQLArg2 -Value (""-l" + $masterTlog + """)")
 invoke-command -computername $Server -ScriptBlock $sblock
+
 ###########################################################################
 ## Update error log startup parameters and sql server dump location
 ##
 ###########################################################################
+
 if ($ErrorlogLocationStartupParam -ne $TargetErrorlogLocationStartupParam)
 {
 echo "`r`nMoving the SQL Server Error Log : `r` $TargetErrorlogLocationStartupParam "
+
 $sblock = [scriptblock]::Create("Set-ItemProperty -path ""HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$ins\MSSQLServer\Parameters"" -Name SQLArg1 -Value (""$TargetErrorlogLocationStartupParam"")")
 invoke-command -computername $Server -ScriptBlock $sblock
 }
+
 if ($SQLServerDumpLocation -ne $TargetSQLServerDumpLocation)
 {
 echo "`r`nMoving the SQL Server Dump Location : `r` $TargetSQLServerDumpLocation "
 $sblock = [scriptblock]::Create("Set-ItemProperty -path ""HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL*.$ins\CPE"" -Name ErrorDumpDir -Value (""$TargetSQLServerDumpLocation"")")
 invoke-command -computername $Server -ScriptBlock $sblock
 }
+
 ###########################################################################
 ## Moves all mdf\ldf files and sql log files to new location
 ##
@@ -370,6 +204,7 @@ $sblock = [scriptblock]::Create("Move-Item -Path ""$sourcedatapath" + "\*.ndf"" 
 $xyz1 = invoke-command -computername $Server -ScriptBlock $sblock
 $sblock = [scriptblock]::Create("Move-Item -Path ""$ErrorlogLocation" + "\*.*"" -Destination ""$TargetErrorlogLocation" + "\""")
 $xyz1 = invoke-command -computername $Server -ScriptBlock $sblock
+
 ###########################################################################
 ##  Restart services
 ##
@@ -404,7 +239,8 @@ $acl.SetAccessRule($rule)
 $acl.SetAccessRule($rule2)
 $acl | Set-Acl -Path $Installlocation
 #$acl | Set-Acl -Path $APILoglocation 
-#cd c:
-#cd\
-#mkdir .\terraform\hardening\Output
-#powershell -c C:\terraform\hardening\Azure_SQL_VM_Hardening.ps1
+
+#(new-object net.webclient).DownloadFile('http://10.18.129.72/packages/lab/hardening.zip','C:\hardening.zip')
+
+
+ 
